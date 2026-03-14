@@ -26,7 +26,7 @@ Copy the `custom_components/karlsruhe_termin/` folder into your HA `/config/cust
 
 1. Go to **Settings → Integrations → Add Integration**
 2. Search for **Karlsruhe Zulassungsstelle**
-3. Enter your **Vorgangsnummer** (e.g. `CA-5250317A`) and **Zugangscode** (e.g. `8638`)
+3. Enter your **Vorgangsnummer** (e.g. `CA-1360317A`) and **Zugangscode** (e.g. `1337`)
 4. Set a polling interval (default: 10 minutes)
 
 ## Entities
