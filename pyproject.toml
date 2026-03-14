@@ -1,0 +1,18 @@
+[project]
+name = "karlsruhe-termin-bot"
+version = "1.0.0"
+description = "Home Assistant integration to monitor Karlsruhe Zulassungsstelle appointments"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "homeassistant",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

@@ -1,0 +1,11 @@
+{
+  "domain": "karlsruhe_termin",
+  "name": "Karlsruhe Zulassungsstelle Termin",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/Bayyo1337/karlsruhe-zulassungsstelle-termin-bot",
+  "requirements": [],
+  "version": "1.0.0",
+  "homeassistant": "2024.1.0",
+  "iot_class": "cloud_polling"
+}

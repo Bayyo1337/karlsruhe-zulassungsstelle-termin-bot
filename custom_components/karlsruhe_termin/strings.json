@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Karlsruhe Zulassungsstelle einrichten",
+        "description": "Gib deine Buchungsdaten ein. Du findest sie in der Bestätigungs-E-Mail.",
+        "data": {
+          "vorgangsnr": "Vorgangsnummer (z.B. CA-5250317A)",
+          "zugangscode": "Zugangscode",
+          "scan_interval": "Prüfintervall (Minuten)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen. Prüfe Vorgangsnummer und Zugangscode."
+    },
+    "abort": {
+      "already_configured": "Diese Vorgangsnummer ist bereits eingerichtet."
+    }
+  }
+}
