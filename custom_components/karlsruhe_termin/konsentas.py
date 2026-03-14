@@ -16,10 +16,20 @@ _XHR = {"X-Requested-With": "XMLHttpRequest"}
 class KonsentasClient:
     """Interact with the Konsentas appointment API."""
 
-    def __init__(self, vorgangsnr: str, zugangscode: str) -> None:
+    def __init__(
+        self,
+        vorgangsnr: str,
+        zugangscode: str,
+        time_window_start: str = "00:00",
+        time_window_end: str = "23:59",
+        min_notice_days: int = 0,
+    ) -> None:
         self.vorgangsnr = vorgangsnr
         self.zugangscode = zugangscode
         self.manage_url = f"{BASE}/form/1/manage/{vorgangsnr}?code={zugangscode}"
+        self._tw_start = _hhmm_to_minutes(time_window_start)
+        self._tw_end = _hhmm_to_minutes(time_window_end)
+        self._min_notice_days = min_notice_days
 
     async def fetch_data(self) -> dict:
         """Return current appointment and available slots via direct API calls.
@@ -35,9 +45,37 @@ class KonsentasClient:
 
             await _init_change(session, auth, signup_recno, self.zugangscode)
 
-            # 4. Get available days and earliest time slot
-            available_days = await _get_available_days(session, auth, current["yeardate"])
+            # Get available days and earliest time slot
+            available_days = await _get_available_days(
+                session, auth, current["yeardate"], self._min_notice_days
+            )
             first_slot = await _get_first_available_slot(session, auth)
+
+            # Apply time window filter
+            if first_slot:
+                slot_minutes = _hhmm_to_minutes(first_slot["time_start"])
+                if not (self._tw_start <= slot_minutes <= self._tw_end):
+                    _LOGGER.debug(
+                        "First slot %s is outside time window %s–%s, ignoring",
+                        first_slot["time_start"],
+                        _minutes_to_hhmm(self._tw_start),
+                        _minutes_to_hhmm(self._tw_end),
+                    )
+                    first_slot = None
+
+            # Apply minimum notice filter
+            if first_slot and self._min_notice_days > 0:
+                now = datetime.now(timezone.utc)
+                min_yeardate = int(
+                    (now + timedelta(days=self._min_notice_days)).strftime("%Y%m%d")
+                )
+                if first_slot["yeardate"] < min_yeardate:
+                    _LOGGER.debug(
+                        "First slot %s is within %d day notice window, ignoring",
+                        first_slot["date"],
+                        self._min_notice_days,
+                    )
+                    first_slot = None
 
             earlier_found = bool(
                 first_slot and first_slot["yeardate"] < current["yeardate"]
@@ -75,6 +113,30 @@ class KonsentasClient:
                 body = await resp.json(content_type=None)
                 _LOGGER.debug("book_slot response: %s", body)
                 return body.get("code") == 3
+
+    async def cancel_appointment(self) -> bool:
+        """Initiate cancellation of the current appointment.
+
+        Flow: login → otamanage_init_storno with signup_recno + code.
+        Returns True if the server accepted the request (HTTP 200).
+        Note: This calls 'init_storno' — the first step of cancellation.
+        """
+        async with aiohttp.ClientSession() as session:
+            login = await _login(session, self.vorgangsnr, self.zugangscode)
+            auth = {"Authorization": f"Bearer {login['jwt']}", **_XHR}
+
+            data = aiohttp.FormData()
+            data.add_field("signup_recno", str(login["signup_recno"]))
+            data.add_field("code", self.zugangscode)
+
+            async with session.post(
+                f"{BASE}/api/otamanage_init_storno/",
+                data=data,
+                headers=auth,
+            ) as resp:
+                body = await resp.json(content_type=None)
+                _LOGGER.debug("cancel_appointment response: %s", body)
+                return resp.status == 200
 
     async def validate(self) -> bool:
         """Return True if credentials are valid."""
@@ -140,6 +202,7 @@ async def _get_available_days(
     session: aiohttp.ClientSession,
     auth: dict,
     current_yeardate: int,
+    min_notice_days: int = 0,
 ) -> list[int]:
     """Return yeardates (YYYYMMDD ints) of days with open slots before the current appointment."""
     now = datetime.now(timezone.utc)
@@ -153,6 +216,8 @@ async def _get_available_days(
     ) as resp:
         body = await resp.json(content_type=None)
 
+    min_yeardate = int((now + timedelta(days=min_notice_days)).strftime("%Y%m%d")) if min_notice_days > 0 else 0
+
     termins = body.get("data", {}).get("termins", [])
     available = []
     for t in termins:
@@ -161,7 +226,7 @@ async def _get_available_days(
         if t.get("className") == "termin-booked-out":
             continue
         yd = int(t["yeardate"])
-        if yd < int(current_yeardate):
+        if yd < int(current_yeardate) and yd >= min_yeardate:
             available.append(yd)
 
     return sorted(available)
@@ -210,3 +275,9 @@ def _yeardate_to_de(yeardate: int) -> str:
 def _minutes_to_hhmm(minutes: int) -> str:
     """Convert 825 → '13:45'."""
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _hhmm_to_minutes(hhmm: str) -> int:
+    """Convert '13:45' → 825."""
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)

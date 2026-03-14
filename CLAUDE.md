@@ -18,12 +18,12 @@ uv run python test_api.py
 ```
 custom_components/karlsruhe_termin/
 ├── __init__.py       # entry setup/unload, wires client + coordinator
-├── config_flow.py    # UI: Vorgangsnr + Zugangscode + scan interval
-├── const.py          # DOMAIN, config keys, MANAGE_URL template, PLATFORMS
-├── coordinator.py    # DataUpdateCoordinator — fires karlsruhe_termin_earlier_appointment event
-├── konsentas.py      # API client (fetch_data, book_slot, validate)
-├── sensor.py         # CurrentAppointmentSensor, EarliestAvailableSensor
-├── button.py         # BookEarliestButton — only active when earlier_slot_found=true
+├── config_flow.py    # UI: Vorgangsnr + Zugangscode + scan interval + filters
+├── const.py          # DOMAIN, config keys, defaults, PLATFORMS
+├── coordinator.py    # DataUpdateCoordinator — fires karlsruhe_termin_earlier_appointment event, tracks last_fetch_time
+├── konsentas.py      # API client (fetch_data, book_slot, cancel_appointment, validate)
+├── sensor.py         # CurrentAppointmentSensor, EarliestAvailableSensor, LastUpdatedSensor
+├── button.py         # BookEarliestButton, CancelAppointmentButton
 ├── manifest.json     # no extra requirements (aiohttp is built into HA)
 └── strings.json      # German UI labels for config flow
 ```
@@ -42,6 +42,7 @@ The `userjwt` from step 1 is used as `Authorization: Bearer <jwt>` for all subse
 - Dates returned by the API use `yeardate: 20260325` (YYYYMMDD int) — converted to `DD.MM.YYYY` by `_yeardate_to_de()`
 - Times are minutes since midnight (`time: 825` → `13:45`) — converted by `_minutes_to_hhmm()`
 - `earlier_slot_found` compares `first_slot["yeardate"] < current["yeardate"]` (int comparison)
+- Config stores time window as `"HH:MM"` strings; `_hhmm_to_minutes()` converts to int for comparison
 
 ## Booking endpoint
 
@@ -50,4 +51,17 @@ The `userjwt` from step 1 is used as `Authorization: Bearer <jwt>` for all subse
 - `ota_termin_resource_group` = `""` (empty)
 - `formdata[ota_termin_resource_group]` = `""` (empty)
 
-Endpoint and fields were confirmed via Playwright network interception (`dev/test_booking_endpoint.py`). Re-authenticating on every `book_slot()` call ensures the JWT is never stale.
+Success: `body["code"] == 3`. Endpoint confirmed via Playwright interception (`dev/test_booking_endpoint.py`).
+
+## Cancellation endpoint
+
+`cancel_appointment()` does a fresh login, then posts to `otamanage_init_storno` with:
+- `signup_recno` = the signup recno from login response
+- `code` = zugangscode
+
+Success: HTTP 200. Endpoint confirmed via Playwright interception (`dev/test_storno_endpoint.py`).
+
+## Filters (optional config)
+
+- **Time window** (`time_window_start` / `time_window_end`): `earliest_available` is suppressed if the slot falls outside the HH:MM window. Does not affect `available_appointments` list (date-only, no time info from API).
+- **Minimum notice** (`min_notice_days`): Filters out slots (and available days) within N days of today.

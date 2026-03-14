@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -23,6 +23,7 @@ async def async_setup_entry(
         [
             CurrentAppointmentSensor(coordinator, entry),
             EarliestAvailableSensor(coordinator, entry),
+            LastUpdatedSensor(coordinator, entry),
         ]
     )
 
@@ -99,3 +100,19 @@ class EarliestAvailableSensor(_BaseSensor):
             "is_earlier_than_current": data.get("earlier_slot_found", False),
             "all_available_days": data.get("available_appointments", []),
         }
+
+
+class LastUpdatedSensor(_BaseSensor):
+    """Timestamp of the last successful data fetch."""
+
+    _attr_name = "Zuletzt aktualisiert"
+    _attr_icon = "mdi:clock-check"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_last_updated"
+
+    @property
+    def native_value(self):
+        return self.coordinator.last_fetch_time

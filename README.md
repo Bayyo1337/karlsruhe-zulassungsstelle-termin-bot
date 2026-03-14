@@ -28,6 +28,7 @@ Copy the `custom_components/karlsruhe_termin/` folder into your HA `/config/cust
 2. Search for **Karlsruhe Zulassungsstelle**
 3. Enter your **Vorgangsnummer** (e.g. `CA-1360317A`) and **Zugangscode** (e.g. `1337`)
 4. Set a polling interval (default: 10 minutes)
+5. Optionally configure filters (see below)
 
 ## Entities
 
@@ -35,13 +36,29 @@ Copy the `custom_components/karlsruhe_termin/` folder into your HA `/config/cust
 |--------|-------------|
 | `sensor.aktueller_termin` | Your currently booked appointment date and time |
 | `sensor.fruhester_verfugbarer_termin` | The earliest available slot (date + time) |
+| `sensor.zuletzt_aktualisiert` | Timestamp of the last successful data fetch |
 | `button.fruhesten_termin_buchen` | Books the earlier slot — only active when an earlier slot exists |
+| `button.termin_stornieren` | Cancels your current appointment — **use with caution** |
 
 The earliest available sensor includes these attributes:
 - `time_start` / `time_end` — time window of the slot
 - `places` — number of available seats
 - `all_available_days` — all available weekdays found
 - `is_earlier_than_current` — `true` when the slot is before your current appointment
+
+## Optional filters
+
+Configure these during setup to narrow which earlier slots are considered valid:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `time_window_start` | `00:00` | Ignore slots starting before this time (e.g. `09:00`) |
+| `time_window_end` | `23:59` | Ignore slots starting after this time (e.g. `15:00`) |
+| `min_notice_days` | `0` | Ignore slots fewer than N days from today (e.g. `2`) |
+
+## Multiple appointments
+
+Add the integration multiple times (once per Vorgangsnummer) to monitor several appointments simultaneously. Each instance creates its own set of entities.
 
 ## Automation example
 
@@ -62,12 +79,11 @@ action:
       message: >
         {{ states('sensor.fruhester_verfugbarer_termin') }} —
         {{ state_attr('sensor.fruhester_verfugbarer_termin', 'places') }} Platz frei
-      data:
-        url: "{{ state_attr('sensor.aktueller_termin', 'manage_url') }}"
 ```
 
 ## Notes
 
 - The integration uses the Konsentas REST API directly — no browser or Chromium required
-- The **book button** uses an unconfirmed API endpoint (`brick_ota_termin_save`). Verify the booking on the Konsentas website afterwards
+- Both the booking and cancellation endpoints were confirmed via Playwright network interception
+- Always verify any booking or cancellation on the [Konsentas website](https://karlsruhe.konsentas.de) afterwards
 - Polling too frequently may result in rate limiting; 10 minutes is recommended
