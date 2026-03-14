@@ -1,7 +1,7 @@
 """
 Standalone test — verifies the API client works without Home Assistant.
 
-Usage:
+Usage (run from the dev/ folder):
     uv run python test_api.py
 """
 
@@ -18,7 +18,7 @@ sys.modules["karlsruhe_termin.const"] = _const
 
 _spec = importlib.util.spec_from_file_location(
     "karlsruhe_termin.konsentas",
-    "custom_components/karlsruhe_termin/konsentas.py",
+    "../custom_components/karlsruhe_termin/konsentas.py",
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
