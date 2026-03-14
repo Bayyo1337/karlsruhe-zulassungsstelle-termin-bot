@@ -5,6 +5,7 @@ description = "Home Assistant integration to monitor Karlsruhe Zulassungsstelle 
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.9",
+    "playwright>=1.40.0",
 ]
 
 [project.optional-dependencies]

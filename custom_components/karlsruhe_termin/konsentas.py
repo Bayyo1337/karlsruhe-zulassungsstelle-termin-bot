@@ -49,19 +49,26 @@ class KonsentasClient:
                 "earliest_available": first_slot,
                 "earlier_slot_found": earlier_found,
                 "manage_url": self.manage_url,
-                "_jwt": login["jwt"],
-                "_signup_recno": signup_recno,
             }
 
-    async def book_slot(self, slot_recno: str, jwt: str, signup_recno: int) -> bool:
-        """Book a specific slot. Returns True on success."""
+    async def book_slot(self, slot_recno: str) -> bool:
+        """Book a specific slot. Re-authenticates first to ensure a fresh JWT.
+
+        Flow: login → init_change → postOtaNextStep with the slot recno.
+        Returns True on success.
+        """
         async with aiohttp.ClientSession() as session:
-            auth = {"Authorization": f"Bearer {jwt}", **_XHR}
+            login = await _login(session, self.vorgangsnr, self.zugangscode)
+            auth = {"Authorization": f"Bearer {login['jwt']}", **_XHR}
+            await _init_change(session, auth, login["signup_recno"], self.zugangscode)
+
             data = aiohttp.FormData()
-            data.add_field("recno", slot_recno)
-            data.add_field("signup_recno", str(signup_recno))
+            data.add_field("formdata[ota_termin_id]", slot_recno)
+            data.add_field("ota_termin_resource_group", "")
+            data.add_field("formdata[ota_termin_resource_group]", "")
+
             async with session.post(
-                f"{BASE}/api/brick_ota_termin_save/",
+                f"{BASE}/api/postOtaNextStep/",
                 data=data,
                 headers=auth,
             ) as resp:

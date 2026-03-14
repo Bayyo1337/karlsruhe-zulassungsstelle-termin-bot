@@ -58,11 +58,9 @@ class BookEarliestButton(ButtonEntity):
     async def async_press(self) -> None:
         data = self._coordinator.data or {}
         slot = data.get("earliest_available")
-        jwt = data.get("_jwt")
-        signup_recno = data.get("_signup_recno")
 
-        if not slot or not jwt or not signup_recno:
-            _LOGGER.error("Cannot book: missing slot data or session. Trigger a refresh first.")
+        if not slot:
+            _LOGGER.error("Cannot book: no earlier slot in coordinator data.")
             return
 
         _LOGGER.warning(
@@ -70,10 +68,11 @@ class BookEarliestButton(ButtonEntity):
             slot["date"], slot["time_start"], slot["recno"],
         )
 
-        success = await self._coordinator.client.book_slot(slot["recno"], jwt, signup_recno)
+        # book_slot does a fresh login internally so the JWT is never stale
+        success = await self._coordinator.client.book_slot(slot["recno"])
 
         if success:
             _LOGGER.warning("Booking successful! New appointment: %s %s", slot["date"], slot["time_start"])
             await self._coordinator.async_request_refresh()
         else:
-            _LOGGER.error("Booking failed — check HA logs and verify manually at %s", data.get("manage_url"))
+            _LOGGER.error("Booking failed — verify manually at %s", data.get("manage_url"))
