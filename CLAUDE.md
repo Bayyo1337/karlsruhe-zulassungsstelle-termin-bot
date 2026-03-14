@@ -45,4 +45,9 @@ The `userjwt` from step 1 is used as `Authorization: Bearer <jwt>` for all subse
 
 ## Booking endpoint
 
-`book_slot()` posts to `brick_ota_termin_save` with `recno` + `signup_recno`. This endpoint was inferred from naming conventions — **verify manually after first use**.
+`book_slot()` does a fresh login, calls `init_change`, then posts to `postOtaNextStep` with:
+- `formdata[ota_termin_id]` = slot recno (e.g. `::20260326:620:635`)
+- `ota_termin_resource_group` = `""` (empty)
+- `formdata[ota_termin_resource_group]` = `""` (empty)
+
+Endpoint and fields were confirmed via Playwright network interception (`dev/test_booking_endpoint.py`). Re-authenticating on every `book_slot()` call ensures the JWT is never stale.
