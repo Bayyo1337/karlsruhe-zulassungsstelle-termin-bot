@@ -39,21 +39,17 @@ class KonsentasClient:
             available_days = await _get_available_days(session, auth, current["yeardate"])
             first_slot = await _get_first_available_slot(session, auth)
 
-            earlier_found = (
-                first_slot is not None
-                and _yeardate_to_de(first_slot["yeardate"]) < current["date"]
-            ) if first_slot else False
+            earlier_found = bool(
+                first_slot and first_slot["yeardate"] < current["yeardate"]
+            )
 
             return {
                 "current_appointment": current,
-                "available_appointments": [
-                    _yeardate_to_de(d) for d in available_days
-                ],
+                "available_appointments": [_yeardate_to_de(d) for d in available_days],
                 "earliest_available": first_slot,
                 "earlier_slot_found": earlier_found,
                 "manage_url": self.manage_url,
-                # Stored for the book_slot button
-                "_jwt": jwt,
+                "_jwt": login["jwt"],
                 "_signup_recno": signup_recno,
             }
 
