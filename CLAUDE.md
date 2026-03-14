@@ -4,52 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Home Assistant custom integration that monitors the Karlsruhe Zulassungsstelle (vehicle registration office) for earlier appointment slots via the Konsentas booking system (`karlsruhe.konsentas.de`).
+Home Assistant custom integration that monitors the Karlsruhe Zulassungsstelle (Konsentas system) for earlier appointment slots. No browser or Chromium — uses the Konsentas REST API directly via `aiohttp`.
 
-Users need a valid appointment first (Vorgangsnummer + Zugangscode, e.g. `CA-5250317A` / `8638`). The integration polls the manage page, compares available slots against the current booking, and fires a `karlsruhe_termin_earlier_appointment` HA event when an earlier date is found.
-
-## Setup
+## Local testing (no HA needed)
 
 ```bash
-# Install dependencies
-pip install playwright
-playwright install chromium
+cd dev
+uv run python test_api.py
 ```
-
-> **Note for HA container users:** Playwright/Chromium must be installed inside the container. See `PRODUCTION-SOLUTION.md` for context.
 
 ## Integration structure
 
 ```
 custom_components/karlsruhe_termin/
-├── __init__.py        # entry setup/unload
-├── config_flow.py     # UI: Vorgangsnr + Zugangscode + scan interval
-├── const.py           # DOMAIN, config keys, MANAGE_URL template
-├── coordinator.py     # DataUpdateCoordinator, fires HA event on earlier slot
-├── konsentas.py       # Playwright client (fetch_data, validate)
-├── manifest.json
-├── sensor.py          # CurrentAppointmentSensor, EarliestAvailableSensor
-└── strings.json       # German UI labels
+├── __init__.py       # entry setup/unload, wires client + coordinator
+├── config_flow.py    # UI: Vorgangsnr + Zugangscode + scan interval
+├── const.py          # DOMAIN, config keys, MANAGE_URL template, PLATFORMS
+├── coordinator.py    # DataUpdateCoordinator — fires karlsruhe_termin_earlier_appointment event
+├── konsentas.py      # API client (fetch_data, book_slot, validate)
+├── sensor.py         # CurrentAppointmentSensor, EarliestAvailableSensor
+├── button.py         # BookEarliestButton — only active when earlier_slot_found=true
+├── manifest.json     # no extra requirements (aiohttp is built into HA)
+└── strings.json      # German UI labels for config flow
 ```
 
-## Key design decisions
+## API flow (konsentas.py)
 
-- **Single browser session per poll**: `konsentas.py` opens one Chromium instance, reads the current appointment from the table, clicks "Ändern", extracts available slots from the Bootstrap Datepicker, then closes.
-- **All date strings are DD.MM.YYYY** (German format). The JS helper in `konsentas.py` also handles Unix timestamps from `data-date` attributes.
-- **Event payload** of `karlsruhe_termin_earlier_appointment`: `{current, earlier, manage_url}` — use this in HA automations to send notifications.
-- **Selector for the change button**: `[data-action="signup_init_change"]` — stable Konsentas attribute per `PRODUCTION-SOLUTION.md`.
+1. `POST /api/otamanage_user_login/` — returns current appointment + `userjwt`
+2. `POST /api/otamanage_init_change/` — enters change mode (requires JWT)
+3. `GET /api/brick_ota_termin_getTimeslot/` — available days with `places > 0`
+4. `GET /api/brick_ota_termin_getFirstAvailableTimeslot/` — earliest slot with exact time
 
-## HA automation example
+The `userjwt` from step 1 is used as `Authorization: Bearer <jwt>` for all subsequent calls.
 
-```yaml
-trigger:
-  platform: event
-  event_type: karlsruhe_termin_earlier_appointment
-action:
-  - service: notify.mobile_app_dein_telefon
-    data:
-      title: "Früherer Termin verfügbar!"
-      message: "{{ trigger.event.data.earlier }} (vorher: {{ trigger.event.data.current }})"
-      data:
-        clickAction: "{{ trigger.event.data.manage_url }}"
-```
+## Key data shapes
+
+- Dates returned by the API use `yeardate: 20260325` (YYYYMMDD int) — converted to `DD.MM.YYYY` by `_yeardate_to_de()`
+- Times are minutes since midnight (`time: 825` → `13:45`) — converted by `_minutes_to_hhmm()`
+- `earlier_slot_found` compares `first_slot["yeardate"] < current["yeardate"]` (int comparison)
+
+## Booking endpoint
+
+`book_slot()` posts to `brick_ota_termin_save` with `recno` + `signup_recno`. This endpoint was inferred from naming conventions — **verify manually after first use**.
