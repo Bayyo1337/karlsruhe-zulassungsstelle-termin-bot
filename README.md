@@ -86,4 +86,4 @@ action:
 - The integration uses the Konsentas REST API directly — no browser or Chromium required
 - Both the booking and cancellation endpoints were confirmed via Playwright network interception
 - Always verify any booking or cancellation on the [Konsentas website](https://karlsruhe.konsentas.de) afterwards
-- Polling too frequently may result in rate limiting; 10 minutes is recommended
+- Polling too frequently may result in rate limiting; 10 minutes worked for me
